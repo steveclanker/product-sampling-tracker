@@ -1,0 +1,912 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>La Haute - Product Sampling Tracker</title>
+<style>
+:root {
+  --primary: #0F1B3D;
+  --primary-light: #1A2D5A;
+  --accent: #3B82F6;
+  --accent-hover: #2563EB;
+  --success: #10B981;
+  --warning: #F59E0B;
+  --danger: #EF4444;
+  --purple: #8B5CF6;
+  --bg: #F8FAFC;
+  --card: #FFFFFF;
+  --border: #E2E8F0;
+  --text: #1E293B;
+  --text-muted: #64748B;
+  --text-light: #94A3B8;
+
+  --status-requested: #3B82F6;
+  --status-ordered: #F59E0B;
+  --status-received: #8B5CF6;
+  --status-approved: #10B981;
+  --status-rejected: #EF4444;
+  --status-ordering: #06B6D4;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); }
+
+/* Top Bar */
+.topbar {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+  color: white; padding: 16px 24px; display: flex; justify-content: space-between; align-items: center;
+  position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+.topbar h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.5px; }
+.topbar-actions { display: flex; gap: 8px; }
+.topbar-btn {
+  background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.25);
+  color: white; padding: 8px 16px; border-radius: 8px; cursor: pointer;
+  font-size: 13px; font-weight: 500; transition: all 0.2s;
+}
+.topbar-btn:hover { background: rgba(255,255,255,0.25); }
+.topbar-btn.primary { background: var(--accent); border-color: var(--accent); }
+.topbar-btn.primary:hover { background: var(--accent-hover); }
+
+/* View Tabs */
+.view-tabs {
+  display: flex; gap: 4px; background: rgba(255,255,255,0.1); border-radius: 8px; padding: 3px;
+}
+.view-tab {
+  padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 13px;
+  color: rgba(255,255,255,0.7); transition: all 0.2s; border: none; background: none;
+}
+.view-tab.active { background: rgba(255,255,255,0.2); color: white; font-weight: 600; }
+
+/* Main Content */
+.container { max-width: 1400px; margin: 0 auto; padding: 24px; }
+
+/* Stats Bar */
+.stats-bar {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px; margin-bottom: 24px;
+}
+.stat-card {
+  background: var(--card); border-radius: 12px; padding: 16px; border: 1px solid var(--border);
+  text-align: center;
+}
+.stat-value { font-size: 28px; font-weight: 700; color: var(--primary); }
+.stat-label { font-size: 12px; color: var(--text-muted); margin-top: 2px; text-transform: uppercase; letter-spacing: 0.5px; }
+
+/* Supplier Section */
+.supplier-section {
+  background: var(--card); border-radius: 12px; border: 1px solid var(--border);
+  margin-bottom: 20px; overflow: hidden;
+}
+.supplier-header {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+  color: white; padding: 16px 20px; display: flex; justify-content: space-between; align-items: center;
+  cursor: pointer; user-select: none;
+}
+.supplier-header h2 { font-size: 16px; font-weight: 600; }
+.supplier-meta { display: flex; gap: 16px; font-size: 13px; opacity: 0.8; }
+.supplier-body { padding: 16px; }
+.supplier-body.collapsed { display: none; }
+
+/* Product Grid */
+.product-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
+
+/* Product Card */
+.product-card {
+  border: 1px solid var(--border); border-radius: 10px; overflow: hidden;
+  transition: all 0.2s; background: white;
+}
+.product-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.08); transform: translateY(-1px); }
+.product-img-wrap {
+  position: relative; width: 100%; height: 200px; background: #F1F5F9;
+  display: flex; align-items: center; justify-content: center; overflow: hidden;
+}
+.product-img-wrap img { width: 100%; height: 100%; object-fit: cover; }
+.product-img-placeholder { color: var(--text-light); font-size: 13px; }
+.mockup-badge {
+  position: absolute; top: 8px; right: 8px; background: var(--purple);
+  color: white; font-size: 10px; padding: 3px 8px; border-radius: 4px; font-weight: 600;
+}
+.product-info { padding: 14px; }
+.product-name { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+.product-category { font-size: 12px; color: var(--text-muted); margin-bottom: 8px; }
+.product-ref { font-size: 11px; color: var(--text-light); margin-bottom: 10px; }
+
+/* Status Badge */
+.status-badge {
+  display: inline-block; padding: 4px 10px; border-radius: 20px;
+  font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;
+}
+.status-requested { background: #EFF6FF; color: var(--status-requested); }
+.status-ordered { background: #FFFBEB; color: var(--status-ordered); }
+.status-received { background: #F5F3FF; color: var(--status-received); }
+.status-approved { background: #ECFDF5; color: var(--status-approved); }
+.status-rejected { background: #FEF2F2; color: var(--status-rejected); }
+.status-ordering { background: #ECFEFF; color: var(--status-ordering); }
+
+/* Product Meta Row */
+.product-meta { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
+.product-actions { display: flex; gap: 4px; }
+.action-btn {
+  width: 30px; height: 30px; border-radius: 6px; border: 1px solid var(--border);
+  background: white; cursor: pointer; display: flex; align-items: center;
+  justify-content: center; font-size: 14px; transition: all 0.2s;
+}
+.action-btn:hover { background: #F1F5F9; }
+
+/* Changes List */
+.changes-list { margin-top: 8px; }
+.change-item {
+  font-size: 12px; color: var(--text-muted); padding: 2px 0;
+  display: flex; align-items: flex-start; gap: 6px;
+}
+.change-item::before { content: '•'; color: var(--accent); font-weight: bold; }
+
+/* Product Link */
+.product-link {
+  display: inline-flex; align-items: center; gap: 4px; font-size: 12px;
+  color: var(--accent); text-decoration: none; margin-top: 6px;
+}
+.product-link:hover { text-decoration: underline; }
+
+/* Modal */
+.modal-overlay {
+  display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.5); z-index: 200; align-items: center; justify-content: center;
+}
+.modal-overlay.active { display: flex; }
+.modal {
+  background: white; border-radius: 16px; width: 90%; max-width: 600px;
+  max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+}
+.modal-header {
+  padding: 20px 24px; border-bottom: 1px solid var(--border);
+  display: flex; justify-content: space-between; align-items: center;
+}
+.modal-header h3 { font-size: 18px; font-weight: 700; }
+.modal-close { background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-muted); }
+.modal-body { padding: 24px; }
+.modal-footer { padding: 16px 24px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 8px; }
+
+/* Form */
+.form-group { margin-bottom: 16px; }
+.form-label { display: block; font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 6px; }
+.form-input, .form-select, .form-textarea {
+  width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px;
+  font-size: 14px; font-family: inherit; transition: border-color 0.2s;
+}
+.form-input:focus, .form-select:focus, .form-textarea:focus { outline: none; border-color: var(--accent); }
+.form-textarea { resize: vertical; min-height: 80px; }
+
+/* Change Tags */
+.change-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.change-tag {
+  background: #EFF6FF; color: var(--accent); padding: 4px 10px; border-radius: 6px;
+  font-size: 12px; display: flex; align-items: center; gap: 4px;
+}
+.change-tag .remove { cursor: pointer; font-weight: bold; }
+
+/* Image Upload */
+.img-upload-area {
+  border: 2px dashed var(--border); border-radius: 10px; padding: 24px;
+  text-align: center; cursor: pointer; transition: all 0.2s;
+}
+.img-upload-area:hover { border-color: var(--accent); background: #F8FAFF; }
+.img-preview { max-width: 100%; max-height: 200px; border-radius: 8px; margin-top: 8px; }
+
+/* Ordering View */
+.order-table { width: 100%; border-collapse: collapse; }
+.order-table th {
+  background: var(--primary); color: white; padding: 12px 16px; text-align: left;
+  font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;
+}
+.order-table td { padding: 12px 16px; border-bottom: 1px solid var(--border); font-size: 14px; }
+.order-table tr:hover { background: #F8FAFC; }
+
+/* Supplier View (Shared) */
+.supplier-view { padding: 32px; max-width: 1000px; margin: 0 auto; }
+.sv-header { text-align: center; margin-bottom: 32px; }
+.sv-header h1 { font-size: 24px; font-weight: 700; color: var(--primary); }
+.sv-header p { color: var(--text-muted); margin-top: 4px; }
+.sv-product {
+  border: 1px solid var(--border); border-radius: 12px; margin-bottom: 16px;
+  overflow: hidden; background: white;
+}
+.sv-product-header {
+  padding: 16px 20px; display: flex; gap: 16px; align-items: center;
+}
+.sv-product-img { width: 80px; height: 80px; border-radius: 8px; object-fit: cover; background: #F1F5F9; flex-shrink: 0; }
+.sv-product-details { flex: 1; }
+.sv-product-name { font-size: 16px; font-weight: 600; }
+.sv-product-ref { font-size: 13px; color: var(--text-muted); }
+.sv-changes {
+  padding: 16px 20px; background: #F8FAFC; border-top: 1px solid var(--border);
+}
+.sv-changes h4 { font-size: 13px; font-weight: 600; text-transform: uppercase; color: var(--text-muted); margin-bottom: 8px; }
+.sv-mockup-row { display: flex; gap: 12px; margin-top: 12px; flex-wrap: wrap; }
+.sv-mockup { max-width: 200px; border-radius: 8px; border: 1px solid var(--border); }
+
+/* Responsive */
+@media (max-width: 768px) {
+  .topbar { flex-direction: column; gap: 12px; padding: 12px 16px; }
+  .container { padding: 12px; }
+  .product-grid { grid-template-columns: 1fr; }
+  .stats-bar { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* Empty State */
+.empty-state { text-align: center; padding: 48px 24px; color: var(--text-muted); }
+.empty-state .emoji { font-size: 48px; margin-bottom: 12px; }
+.empty-state p { font-size: 14px; }
+
+/* Qty Input */
+.qty-input { width: 70px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; text-align: center; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>La Haute - Product Sampling</h1>
+  <div style="display:flex;align-items:center;gap:12px;">
+    <div class="view-tabs">
+      <button class="view-tab active" onclick="switchView('internal')">Internal</button>
+      <button class="view-tab" onclick="switchView('ordering')">Ordering</button>
+      <button class="view-tab" onclick="switchView('supplier')">Supplier View</button>
+    </div>
+    <div class="topbar-actions">
+      <button class="topbar-btn" onclick="openAddSupplier()">+ Supplier</button>
+      <button class="topbar-btn primary" onclick="openAddProduct()">+ Product</button>
+      <button class="topbar-btn" onclick="exportData()">Export</button>
+    </div>
+  </div>
+</div>
+
+<div class="container" id="mainContent">
+  <!-- Stats -->
+  <div class="stats-bar" id="statsBar"></div>
+  <!-- Content rendered by JS -->
+  <div id="viewContent"></div>
+</div>
+
+<!-- Product Modal -->
+<div class="modal-overlay" id="productModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="productModalTitle">Add Product</h3>
+      <button class="modal-close" onclick="closeModal('productModal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Supplier</label>
+        <select class="form-select" id="pSupplier"></select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Product Name</label>
+        <input class="form-input" id="pName" placeholder="e.g. Heavyweight Hoodie">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Category</label>
+        <select class="form-select" id="pCategory">
+          <option value="Hoodies">Hoodies</option>
+          <option value="Overshirts">Overshirts</option>
+          <option value="Jumpers">Jumpers</option>
+          <option value="Jackets">Jackets</option>
+          <option value="Pants">Pants</option>
+          <option value="Shorts">Shorts</option>
+          <option value="Polos">Polos</option>
+          <option value="T-Shirts">T-Shirts</option>
+          <option value="Henleys">Henleys</option>
+          <option value="Accessories">Accessories</option>
+          <option value="Other">Other</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Catalogue Reference / SKU</label>
+        <input class="form-input" id="pRef" placeholder="e.g. HW-HOOD-001">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Product Link</label>
+        <input class="form-input" id="pLink" placeholder="https://...">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Sample Status</label>
+        <select class="form-select" id="pStatus">
+          <option value="requested">Requested</option>
+          <option value="ordered">Ordered</option>
+          <option value="received">Received</option>
+          <option value="approved">Approved</option>
+          <option value="rejected">Rejected</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Requested Changes</label>
+        <div style="display:flex;gap:8px;">
+          <input class="form-input" id="pChangeInput" placeholder="e.g. Add La Haute logo to back neck">
+          <button class="topbar-btn primary" onclick="addChange()" style="white-space:nowrap;">Add</button>
+        </div>
+        <div class="change-tags" id="changeTags"></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Quantity (sample order)</label>
+        <input class="form-input" id="pQty" type="number" placeholder="e.g. 1" value="1">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Product Image</label>
+        <div class="img-upload-area" onclick="document.getElementById('pImgFile').click()">
+          <div>Click to upload or drag image</div>
+          <input type="file" id="pImgFile" accept="image/*" style="display:none" onchange="handleImgUpload(this,'pImgPreview')">
+        </div>
+        <img id="pImgPreview" class="img-preview" style="display:none">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Mockup Image (logo placement)</label>
+        <div class="img-upload-area" onclick="document.getElementById('pMockupFile').click()">
+          <div>Click to upload mockup</div>
+          <input type="file" id="pMockupFile" accept="image/*" style="display:none" onchange="handleImgUpload(this,'pMockupPreview')">
+        </div>
+        <img id="pMockupPreview" class="img-preview" style="display:none">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Notes</label>
+        <textarea class="form-textarea" id="pNotes" placeholder="Any additional notes..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="topbar-btn" onclick="closeModal('productModal')">Cancel</button>
+      <button class="topbar-btn primary" onclick="saveProduct()">Save Product</button>
+    </div>
+  </div>
+</div>
+
+<!-- Supplier Modal -->
+<div class="modal-overlay" id="supplierModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="supplierModalTitle">Add Supplier</h3>
+      <button class="modal-close" onclick="closeModal('supplierModal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Supplier Name</label>
+        <input class="form-input" id="sName" placeholder="e.g. Guangzhou Supplier A">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Contact Name</label>
+        <input class="form-input" id="sContact" placeholder="e.g. Wilbur">
+      </div>
+      <div class="form-group">
+        <label class="form-label">WeChat / Contact Info</label>
+        <input class="form-input" id="sWechat" placeholder="WeChat ID or phone">
+      </div>
+      <div class="form-group">
+        <label class="form-label">MOQ Details</label>
+        <input class="form-input" id="sMoq" placeholder="e.g. 0 MOQ logo-only, 50-100 full custom">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Notes</label>
+        <textarea class="form-textarea" id="sNotes" placeholder="Any notes about this supplier..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="topbar-btn" onclick="closeModal('supplierModal')">Cancel</button>
+      <button class="topbar-btn primary" onclick="saveSupplier()">Save Supplier</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const STORAGE_KEY = 'laHauteProductSampling';
+let currentView = 'internal';
+let editingProductId = null;
+let editingSupplierId = null;
+let tempChanges = [];
+
+function loadData() {
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if (raw) return JSON.parse(raw);
+  return { suppliers: [], products: [] };
+}
+function saveData(data) { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); }
+function genId() { return Date.now().toString(36) + Math.random().toString(36).substr(2,6); }
+
+// ---- RENDER ----
+function render() {
+  renderStats();
+  if (currentView === 'internal') renderInternal();
+  else if (currentView === 'ordering') renderOrdering();
+  else if (currentView === 'supplier') renderSupplierView();
+}
+
+function renderStats() {
+  const data = loadData();
+  const total = data.products.length;
+  const requested = data.products.filter(p => p.status === 'requested').length;
+  const ordered = data.products.filter(p => p.status === 'ordered').length;
+  const received = data.products.filter(p => p.status === 'received').length;
+  const approved = data.products.filter(p => p.status === 'approved').length;
+  const rejected = data.products.filter(p => p.status === 'rejected').length;
+
+  document.getElementById('statsBar').innerHTML = `
+    <div class="stat-card"><div class="stat-value">${total}</div><div class="stat-label">Total Products</div></div>
+    <div class="stat-card"><div class="stat-value" style="color:var(--status-requested)">${requested}</div><div class="stat-label">Requested</div></div>
+    <div class="stat-card"><div class="stat-value" style="color:var(--status-ordered)">${ordered}</div><div class="stat-label">Ordered</div></div>
+    <div class="stat-card"><div class="stat-value" style="color:var(--status-received)">${received}</div><div class="stat-label">Received</div></div>
+    <div class="stat-card"><div class="stat-value" style="color:var(--status-approved)">${approved}</div><div class="stat-label">Approved</div></div>
+    <div class="stat-card"><div class="stat-value" style="color:var(--status-rejected)">${rejected}</div><div class="stat-label">Rejected</div></div>
+  `;
+}
+
+function renderInternal() {
+  const data = loadData();
+  const el = document.getElementById('viewContent');
+
+  if (data.suppliers.length === 0) {
+    el.innerHTML = `<div class="empty-state"><div class="emoji">📦</div><p>No suppliers added yet. Click <strong>+ Supplier</strong> to get started.</p></div>`;
+    return;
+  }
+
+  let html = '';
+  for (const sup of data.suppliers) {
+    const prods = data.products.filter(p => p.supplierId === sup.id);
+    const counts = {
+      requested: prods.filter(p=>p.status==='requested').length,
+      ordered: prods.filter(p=>p.status==='ordered').length,
+      received: prods.filter(p=>p.status==='received').length,
+      approved: prods.filter(p=>p.status==='approved').length,
+    };
+    html += `
+      <div class="supplier-section">
+        <div class="supplier-header" onclick="toggleSupplier('${sup.id}')">
+          <h2>${sup.name} <span style="font-weight:400;font-size:13px;opacity:0.7">(${prods.length} products)</span></h2>
+          <div class="supplier-meta">
+            ${sup.moq ? `<span>MOQ: ${sup.moq}</span>` : ''}
+            ${sup.contact ? `<span>Contact: ${sup.contact}</span>` : ''}
+            <span style="font-size:16px" id="chevron-${sup.id}">▼</span>
+          </div>
+        </div>
+        <div class="supplier-body" id="body-${sup.id}">
+          <div style="margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;">
+            <div style="display:flex;gap:8px;font-size:12px;color:var(--text-muted);">
+              <span style="color:var(--status-requested)">● ${counts.requested} Requested</span>
+              <span style="color:var(--status-ordered)">● ${counts.ordered} Ordered</span>
+              <span style="color:var(--status-received)">● ${counts.received} Received</span>
+              <span style="color:var(--status-approved)">● ${counts.approved} Approved</span>
+            </div>
+            <div style="display:flex;gap:4px;">
+              <button class="action-btn" title="Edit Supplier" onclick="editSupplier('${sup.id}')">✏️</button>
+              <button class="action-btn" title="Copy Supplier Link" onclick="copySupplierLink('${sup.id}')">🔗</button>
+              <button class="action-btn" title="Delete Supplier" onclick="deleteSupplier('${sup.id}')">🗑️</button>
+            </div>
+          </div>
+          ${prods.length === 0 ? '<div class="empty-state" style="padding:24px"><p>No products yet. Click <strong>+ Product</strong> to add one.</p></div>' : ''}
+          <div class="product-grid">
+            ${prods.map(p => renderProductCard(p)).join('')}
+          </div>
+        </div>
+      </div>
+    `;
+  }
+  el.innerHTML = html;
+}
+
+function renderProductCard(p) {
+  return `
+    <div class="product-card">
+      <div class="product-img-wrap">
+        ${p.image ? `<img src="${p.image}" alt="${p.name}">` : '<div class="product-img-placeholder">No image</div>'}
+        ${p.mockup ? '<div class="mockup-badge">MOCKUP</div>' : ''}
+      </div>
+      <div class="product-info">
+        <div class="product-name">${p.name}</div>
+        <div class="product-category">${p.category}</div>
+        ${p.ref ? `<div class="product-ref">Ref: ${p.ref}</div>` : ''}
+        <span class="status-badge status-${p.status}">${p.status}</span>
+        ${p.changes && p.changes.length ? `
+          <div class="changes-list">
+            ${p.changes.map(c => `<div class="change-item">${c}</div>`).join('')}
+          </div>
+        ` : ''}
+        ${p.link ? `<a class="product-link" href="${p.link}" target="_blank">🔗 View Product</a>` : ''}
+        <div class="product-meta">
+          <span style="font-size:12px;color:var(--text-muted)">Qty: ${p.qty || 1}</span>
+          <div class="product-actions">
+            <button class="action-btn" title="Edit" onclick="editProduct('${p.id}')">✏️</button>
+            <button class="action-btn" title="Cycle Status" onclick="cycleStatus('${p.id}')">🔄</button>
+            <button class="action-btn" title="Delete" onclick="deleteProduct('${p.id}')">🗑️</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderOrdering() {
+  const data = loadData();
+  const approved = data.products.filter(p => p.status === 'approved' || p.status === 'ordering');
+  const el = document.getElementById('viewContent');
+
+  if (approved.length === 0) {
+    el.innerHTML = `<div class="empty-state"><div class="emoji">✅</div><p>No approved products ready for ordering yet.</p></div>`;
+    return;
+  }
+
+  let html = `
+    <div class="supplier-section">
+      <div class="supplier-header" style="cursor:default">
+        <h2>Ready to Order (${approved.length} products)</h2>
+      </div>
+      <div class="supplier-body">
+        <table class="order-table">
+          <thead><tr>
+            <th>Product</th><th>Category</th><th>Supplier</th><th>Ref</th><th>Changes</th><th>Qty</th><th>Status</th><th>Actions</th>
+          </tr></thead>
+          <tbody>
+  `;
+  for (const p of approved) {
+    const sup = data.suppliers.find(s => s.id === p.supplierId);
+    html += `<tr>
+      <td><strong>${p.name}</strong></td>
+      <td>${p.category}</td>
+      <td>${sup ? sup.name : '-'}</td>
+      <td>${p.ref || '-'}</td>
+      <td>${p.changes ? p.changes.join(', ') : '-'}</td>
+      <td><input class="qty-input" type="number" value="${p.orderQty || ''}" onchange="updateOrderQty('${p.id}', this.value)" placeholder="Qty"></td>
+      <td><span class="status-badge status-${p.status}">${p.status}</span></td>
+      <td><button class="action-btn" onclick="markOrdering('${p.id}')">📦</button></td>
+    </tr>`;
+  }
+  html += '</tbody></table></div></div>';
+  el.innerHTML = html;
+}
+
+function renderSupplierView() {
+  const data = loadData();
+  const el = document.getElementById('viewContent');
+
+  if (data.suppliers.length === 0) {
+    el.innerHTML = `<div class="empty-state"><div class="emoji">🔗</div><p>No suppliers to show. Add suppliers and products first.</p></div>`;
+    return;
+  }
+
+  // Show selector for which supplier
+  let html = '<div style="margin-bottom:16px;display:flex;gap:8px;align-items:center;">';
+  html += '<label class="form-label" style="margin:0">Preview supplier view for:</label>';
+  html += '<select class="form-select" style="width:auto" onchange="selectedSupplierView=this.value;render()" id="svSelect">';
+  for (const s of data.suppliers) {
+    html += `<option value="${s.id}" ${s.id === selectedSupplierView ? 'selected' : ''}>${s.name}</option>`;
+  }
+  html += '</select>';
+  html += `<button class="topbar-btn primary" onclick="copySupplierLink(selectedSupplierView||'${data.suppliers[0].id}')">Copy Shareable Link</button>`;
+  html += '</div>';
+
+  const sid = selectedSupplierView || data.suppliers[0].id;
+  const sup = data.suppliers.find(s => s.id === sid);
+  const prods = data.products.filter(p => p.supplierId === sid && p.status !== 'rejected');
+
+  html += `<div class="supplier-view" style="padding:0">
+    <div class="sv-header" style="text-align:left;margin-bottom:16px;">
+      <h1>La Haute - Product Plan for ${sup.name}</h1>
+      <p>${prods.length} products in progress</p>
+    </div>`;
+
+  for (const p of prods) {
+    html += `
+      <div class="sv-product">
+        <div class="sv-product-header">
+          ${p.image ? `<img class="sv-product-img" src="${p.image}">` : '<div class="sv-product-img" style="display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--text-light)">No img</div>'}
+          <div class="sv-product-details">
+            <div class="sv-product-name">${p.name}</div>
+            <div class="sv-product-ref">${p.category}${p.ref ? ' - Ref: ' + p.ref : ''} - Qty: ${p.qty || 1}</div>
+            <span class="status-badge status-${p.status}" style="margin-top:6px">${p.status}</span>
+          </div>
+        </div>
+        ${(p.changes && p.changes.length) || p.mockup ? `
+          <div class="sv-changes">
+            ${p.changes && p.changes.length ? `
+              <h4>Requested Changes</h4>
+              ${p.changes.map(c => `<div class="change-item">${c}</div>`).join('')}
+            ` : ''}
+            ${p.mockup ? `
+              <h4 style="margin-top:12px">Mockup Reference</h4>
+              <div class="sv-mockup-row"><img class="sv-mockup" src="${p.mockup}"></div>
+            ` : ''}
+          </div>
+        ` : ''}
+      </div>
+    `;
+  }
+  html += '</div>';
+  el.innerHTML = html;
+}
+
+let selectedSupplierView = null;
+
+// ---- VIEW SWITCHING ----
+function switchView(view) {
+  currentView = view;
+  document.querySelectorAll('.view-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.view-tab').forEach(t => { if(t.textContent.toLowerCase().includes(view === 'supplier' ? 'supplier' : view)) t.classList.add('active'); });
+  render();
+}
+
+// ---- SUPPLIER CRUD ----
+function openAddSupplier() {
+  editingSupplierId = null;
+  document.getElementById('supplierModalTitle').textContent = 'Add Supplier';
+  document.getElementById('sName').value = '';
+  document.getElementById('sContact').value = '';
+  document.getElementById('sWechat').value = '';
+  document.getElementById('sMoq').value = '';
+  document.getElementById('sNotes').value = '';
+  openModal('supplierModal');
+}
+
+function editSupplier(id) {
+  const data = loadData();
+  const s = data.suppliers.find(x => x.id === id);
+  if (!s) return;
+  editingSupplierId = id;
+  document.getElementById('supplierModalTitle').textContent = 'Edit Supplier';
+  document.getElementById('sName').value = s.name;
+  document.getElementById('sContact').value = s.contact || '';
+  document.getElementById('sWechat').value = s.wechat || '';
+  document.getElementById('sMoq').value = s.moq || '';
+  document.getElementById('sNotes').value = s.notes || '';
+  openModal('supplierModal');
+}
+
+function saveSupplier() {
+  const data = loadData();
+  const obj = {
+    name: document.getElementById('sName').value.trim(),
+    contact: document.getElementById('sContact').value.trim(),
+    wechat: document.getElementById('sWechat').value.trim(),
+    moq: document.getElementById('sMoq').value.trim(),
+    notes: document.getElementById('sNotes').value.trim(),
+  };
+  if (!obj.name) { alert('Supplier name required'); return; }
+
+  if (editingSupplierId) {
+    const idx = data.suppliers.findIndex(s => s.id === editingSupplierId);
+    if (idx >= 0) Object.assign(data.suppliers[idx], obj);
+  } else {
+    obj.id = genId();
+    data.suppliers.push(obj);
+  }
+  saveData(data);
+  closeModal('supplierModal');
+  render();
+}
+
+function deleteSupplier(id) {
+  if (!confirm('Delete this supplier and all its products?')) return;
+  const data = loadData();
+  data.suppliers = data.suppliers.filter(s => s.id !== id);
+  data.products = data.products.filter(p => p.supplierId !== id);
+  saveData(data);
+  render();
+}
+
+function toggleSupplier(id) {
+  const body = document.getElementById('body-' + id);
+  const chev = document.getElementById('chevron-' + id);
+  if (body.classList.contains('collapsed')) {
+    body.classList.remove('collapsed');
+    chev.textContent = '▼';
+  } else {
+    body.classList.add('collapsed');
+    chev.textContent = '▶';
+  }
+}
+
+// ---- PRODUCT CRUD ----
+function openAddProduct() {
+  editingProductId = null;
+  tempChanges = [];
+  document.getElementById('productModalTitle').textContent = 'Add Product';
+  document.getElementById('pName').value = '';
+  document.getElementById('pCategory').value = 'Hoodies';
+  document.getElementById('pRef').value = '';
+  document.getElementById('pLink').value = '';
+  document.getElementById('pStatus').value = 'requested';
+  document.getElementById('pQty').value = '1';
+  document.getElementById('pNotes').value = '';
+  document.getElementById('pImgPreview').style.display = 'none';
+  document.getElementById('pImgPreview').src = '';
+  document.getElementById('pMockupPreview').style.display = 'none';
+  document.getElementById('pMockupPreview').src = '';
+  document.getElementById('pImgFile').value = '';
+  document.getElementById('pMockupFile').value = '';
+  renderChangeTags();
+  populateSupplierSelect();
+  openModal('productModal');
+}
+
+function editProduct(id) {
+  const data = loadData();
+  const p = data.products.find(x => x.id === id);
+  if (!p) return;
+  editingProductId = id;
+  tempChanges = [...(p.changes || [])];
+  document.getElementById('productModalTitle').textContent = 'Edit Product';
+  document.getElementById('pName').value = p.name;
+  document.getElementById('pCategory').value = p.category;
+  document.getElementById('pRef').value = p.ref || '';
+  document.getElementById('pLink').value = p.link || '';
+  document.getElementById('pStatus').value = p.status;
+  document.getElementById('pQty').value = p.qty || 1;
+  document.getElementById('pNotes').value = p.notes || '';
+
+  const imgPrev = document.getElementById('pImgPreview');
+  if (p.image) { imgPrev.src = p.image; imgPrev.style.display = 'block'; }
+  else { imgPrev.style.display = 'none'; imgPrev.src = ''; }
+
+  const mockPrev = document.getElementById('pMockupPreview');
+  if (p.mockup) { mockPrev.src = p.mockup; mockPrev.style.display = 'block'; }
+  else { mockPrev.style.display = 'none'; mockPrev.src = ''; }
+
+  renderChangeTags();
+  populateSupplierSelect(p.supplierId);
+  openModal('productModal');
+}
+
+function saveProduct() {
+  const data = loadData();
+  const supplierId = document.getElementById('pSupplier').value;
+  const obj = {
+    name: document.getElementById('pName').value.trim(),
+    category: document.getElementById('pCategory').value,
+    ref: document.getElementById('pRef').value.trim(),
+    link: document.getElementById('pLink').value.trim(),
+    status: document.getElementById('pStatus').value,
+    qty: parseInt(document.getElementById('pQty').value) || 1,
+    notes: document.getElementById('pNotes').value.trim(),
+    changes: [...tempChanges],
+    supplierId: supplierId,
+  };
+
+  const imgPrev = document.getElementById('pImgPreview');
+  if (imgPrev.src && imgPrev.style.display !== 'none') obj.image = imgPrev.src;
+  const mockPrev = document.getElementById('pMockupPreview');
+  if (mockPrev.src && mockPrev.style.display !== 'none') obj.mockup = mockPrev.src;
+
+  if (!obj.name) { alert('Product name required'); return; }
+  if (!supplierId) { alert('Select a supplier'); return; }
+
+  if (editingProductId) {
+    const idx = data.products.findIndex(p => p.id === editingProductId);
+    if (idx >= 0) {
+      if (!obj.image && data.products[idx].image) obj.image = data.products[idx].image;
+      if (!obj.mockup && data.products[idx].mockup) obj.mockup = data.products[idx].mockup;
+      Object.assign(data.products[idx], obj);
+    }
+  } else {
+    obj.id = genId();
+    obj.createdAt = new Date().toISOString();
+    data.products.push(obj);
+  }
+  saveData(data);
+  closeModal('productModal');
+  render();
+}
+
+function deleteProduct(id) {
+  if (!confirm('Delete this product?')) return;
+  const data = loadData();
+  data.products = data.products.filter(p => p.id !== id);
+  saveData(data);
+  render();
+}
+
+function cycleStatus(id) {
+  const data = loadData();
+  const p = data.products.find(x => x.id === id);
+  if (!p) return;
+  const order = ['requested','ordered','received','approved','rejected'];
+  const idx = order.indexOf(p.status);
+  p.status = order[(idx + 1) % order.length];
+  saveData(data);
+  render();
+}
+
+// ---- CHANGES ----
+function addChange() {
+  const input = document.getElementById('pChangeInput');
+  const val = input.value.trim();
+  if (!val) return;
+  tempChanges.push(val);
+  input.value = '';
+  renderChangeTags();
+}
+
+function removeChange(idx) {
+  tempChanges.splice(idx, 1);
+  renderChangeTags();
+}
+
+function renderChangeTags() {
+  const el = document.getElementById('changeTags');
+  el.innerHTML = tempChanges.map((c, i) =>
+    `<div class="change-tag">${c} <span class="remove" onclick="removeChange(${i})">&times;</span></div>`
+  ).join('');
+}
+
+// ---- IMAGE UPLOAD ----
+function handleImgUpload(input, previewId) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const preview = document.getElementById(previewId);
+    preview.src = e.target.result;
+    preview.style.display = 'block';
+  };
+  reader.readAsDataURL(file);
+}
+
+// ---- ORDERING ----
+function updateOrderQty(id, val) {
+  const data = loadData();
+  const p = data.products.find(x => x.id === id);
+  if (p) { p.orderQty = parseInt(val) || 0; saveData(data); }
+}
+function markOrdering(id) {
+  const data = loadData();
+  const p = data.products.find(x => x.id === id);
+  if (p) { p.status = 'ordering'; saveData(data); render(); }
+}
+
+// ---- SUPPLIER LINK ----
+function copySupplierLink(supplierId) {
+  const url = window.location.href.split('?')[0] + '?supplier=' + supplierId;
+  navigator.clipboard.writeText(url).then(() => alert('Supplier link copied!'));
+}
+
+// ---- MODALS ----
+function openModal(id) { document.getElementById(id).classList.add('active'); }
+function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+
+function populateSupplierSelect(selectedId) {
+  const data = loadData();
+  const sel = document.getElementById('pSupplier');
+  sel.innerHTML = data.suppliers.map(s =>
+    `<option value="${s.id}" ${s.id === selectedId ? 'selected' : ''}>${s.name}</option>`
+  ).join('');
+}
+
+// ---- EXPORT ----
+function exportData() {
+  const data = loadData();
+  const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'la-haute-sampling-' + new Date().toISOString().split('T')[0] + '.json';
+  a.click();
+}
+
+// ---- SUPPLIER VIEW MODE (shared link) ----
+function checkSupplierView() {
+  const params = new URLSearchParams(window.location.search);
+  const sid = params.get('supplier');
+  if (sid) {
+    selectedSupplierView = sid;
+    document.querySelector('.topbar-actions').style.display = 'none';
+    document.querySelector('.view-tabs').style.display = 'none';
+    document.getElementById('statsBar').style.display = 'none';
+    currentView = 'supplier';
+    render();
+    return true;
+  }
+  return false;
+}
+
+// ---- INIT ----
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && document.getElementById('pChangeInput') === document.activeElement) addChange();
+});
+
+if (!checkSupplierView()) render();
+</script>
+</body>
+</html>

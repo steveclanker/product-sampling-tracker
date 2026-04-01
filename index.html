@@ -421,36 +421,70 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 
 <script>
 const STORAGE_KEY = 'laHauteProductSampling';
+const IDB_NAME = 'laHauteImages';
+const IDB_STORE = 'blobs';
 let currentView = 'internal';
 let editingProductId = null;
 let editingSupplierId = null;
 let tempChanges = [];
 
+// ---- IndexedDB for images (no size limit) ----
+function openIDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(IDB_NAME, 1);
+    req.onupgradeneeded = () => req.result.createObjectStore(IDB_STORE);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function idbPut(key, value) {
+  const db = await openIDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(IDB_STORE, 'readwrite');
+    tx.objectStore(IDB_STORE).put(value, key);
+    tx.oncomplete = () => { db.close(); resolve(); };
+    tx.onerror = () => { db.close(); reject(tx.error); };
+  });
+}
+
+async function idbGet(key) {
+  const db = await openIDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(IDB_STORE, 'readonly');
+    const req = tx.objectStore(IDB_STORE).get(key);
+    req.onsuccess = () => { db.close(); resolve(req.result); };
+    req.onerror = () => { db.close(); reject(req.error); };
+  });
+}
+
+async function idbDelete(key) {
+  const db = await openIDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(IDB_STORE, 'readwrite');
+    tx.objectStore(IDB_STORE).delete(key);
+    tx.oncomplete = () => { db.close(); resolve(); };
+    tx.onerror = () => { db.close(); reject(tx.error); };
+  });
+}
+
+function imgKey() { return 'img_' + Date.now().toString(36) + Math.random().toString(36).substr(2,6); }
+
+// ---- localStorage for metadata only (images stored as IDB keys) ----
 function loadData() {
   const raw = localStorage.getItem(STORAGE_KEY);
   if (raw) return JSON.parse(raw);
   return { suppliers: [], products: [] };
 }
 function saveData(data) {
-  try {
-    const json = JSON.stringify(data);
-    localStorage.setItem(STORAGE_KEY, json);
-  } catch(e) {
-    if (e.name === 'QuotaExceededError' || e.code === 22) {
-      // Try saving without images as fallback
-      const lite = JSON.parse(JSON.stringify(data));
-      lite.products.forEach(p => { p.images = []; p.mockups = []; p.image = null; p.mockup = null; });
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(lite));
-        alert('Storage full - saved without images. Consider removing some product images to free space.');
-        return;
-      } catch(e2) {
-        alert('Storage completely full. Try deleting some products first.');
-        return;
-      }
-    }
-    alert('Save failed: ' + e.message);
-  }
+  // Strip any inline base64 from products before saving to localStorage
+  const clean = JSON.parse(JSON.stringify(data));
+  clean.products.forEach(p => {
+    // images/mockups should be IDB key arrays, not base64
+    if (p.image && p.image.startsWith('data:')) p.image = null;
+    if (p.mockup && p.mockup.startsWith('data:')) p.mockup = null;
+  });
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(clean));
 }
 function genId() { return Date.now().toString(36) + Math.random().toString(36).substr(2,6); }
 
@@ -460,6 +494,40 @@ function render() {
   if (currentView === 'internal') renderInternal();
   else if (currentView === 'ordering') renderOrdering();
   else if (currentView === 'supplier') renderSupplierView();
+  loadCardImages();
+}
+
+async function loadCardImages() {
+  const data = loadData();
+  for (const p of data.products) {
+    const el = document.getElementById('pcard-img-' + p.id);
+    if (!el) continue;
+    const firstKey = (p.images && p.images[0]) || p.image;
+    let src = null;
+    if (firstKey) {
+      if (firstKey.startsWith('data:')) src = firstKey;
+      else src = await idbGet(firstKey).catch(() => null);
+    }
+    const imgCount = (p.images && p.images.length) || (p.image ? 1 : 0);
+    const hasMockup = (p.mockups && p.mockups.length) || p.mockup;
+    el.innerHTML = (src ? `<img src="${src}" alt="${p.name||''}">` : '<div class="product-img-placeholder">No image</div>')
+      + (imgCount > 1 ? `<div class="mockup-badge">${imgCount} imgs</div>` : '')
+      + (hasMockup ? '<div class="mockup-badge" style="right:auto;left:8px">MOCKUP</div>' : '');
+    // Supplier view mockups
+    const svEl = document.getElementById('sv-mockups-' + p.id);
+    if (svEl) {
+      const mockKeys = (p.mockups && p.mockups.length) ? p.mockups : (p.mockup ? [p.mockup] : []);
+      if (mockKeys.length) {
+        let html = '<h4 style="margin-top:12px">Mockup References</h4><div class="sv-mockup-row">';
+        for (const mk of mockKeys) {
+          const msrc = mk.startsWith('data:') ? mk : await idbGet(mk).catch(() => null);
+          if (msrc) html += `<img class="sv-mockup" src="${msrc}">`;
+        }
+        html += '</div>';
+        svEl.innerHTML = html;
+      }
+    }
+  }
 }
 
 function renderStats() {
@@ -537,10 +605,8 @@ function renderInternal() {
 function renderProductCard(p) {
   return `
     <div class="product-card">
-      <div class="product-img-wrap">
-        ${(p.images && p.images.length) ? `<img src="${p.images[0]}" alt="${p.name}">` : (p.image ? `<img src="${p.image}" alt="${p.name}">` : '<div class="product-img-placeholder">No image</div>')}
-        ${(p.images && p.images.length > 1) ? `<div class="mockup-badge">${p.images.length} imgs</div>` : ''}
-        ${(p.mockups && p.mockups.length) || p.mockup ? '<div class="mockup-badge" style="right:auto;left:8px">MOCKUP</div>' : ''}
+      <div class="product-img-wrap" id="pcard-img-${p.id}">
+        <div class="product-img-placeholder">Loading...</div>
       </div>
       <div class="product-info">
         <div class="product-name">${p.name}</div>
@@ -652,13 +718,7 @@ function renderSupplierView() {
               <h4>Requested Changes</h4>
               ${p.changes.map(c => `<div class="change-item">${c}</div>`).join('')}
             ` : ''}
-            ${(p.mockups && p.mockups.length) ? `
-              <h4 style="margin-top:12px">Mockup References</h4>
-              <div class="sv-mockup-row">${p.mockups.map(m => `<img class="sv-mockup" src="${m}">`).join('')}</div>
-            ` : (p.mockup ? `
-              <h4 style="margin-top:12px">Mockup Reference</h4>
-              <div class="sv-mockup-row"><img class="sv-mockup" src="${p.mockup}"></div>
-            ` : '')}
+            <div id="sv-mockups-${p.id}"></div>
           </div>
         ` : ''}
       </div>
@@ -782,10 +842,21 @@ function editProduct(id) {
   document.getElementById('pQty').value = p.qty || 1;
   document.getElementById('pNotes').value = p.notes || '';
 
-  // Load multi-images (backward compat with single image field)
-  tempImages = p.images ? [...p.images] : (p.image ? [p.image] : []);
-  tempMockups = p.mockups ? [...p.mockups] : (p.mockup ? [p.mockup] : []);
-  renderGallery('images'); renderGallery('mockups');
+  // Load multi-images (migrate old base64 to IDB keys)
+  tempImages = []; tempMockups = [];
+  const srcImgs = p.images && p.images.length ? p.images : (p.image ? [p.image] : []);
+  const srcMocks = p.mockups && p.mockups.length ? p.mockups : (p.mockup ? [p.mockup] : []);
+  (async () => {
+    for (const v of srcImgs) {
+      if (v && v.startsWith('data:')) { const k = imgKey(); await idbPut(k, v); tempImages.push(k); }
+      else if (v) tempImages.push(v);
+    }
+    for (const v of srcMocks) {
+      if (v && v.startsWith('data:')) { const k = imgKey(); await idbPut(k, v); tempMockups.push(k); }
+      else if (v) tempMockups.push(v);
+    }
+    renderGallery('images'); renderGallery('mockups');
+  })();
   renderChangeTags();
   populateSupplierSelect(p.supplierId);
   openModal('productModal');
@@ -806,9 +877,8 @@ function saveProduct() {
     supplierId: supplierId,
   };
 
-  obj.images = [...tempImages];
-  obj.mockups = [...tempMockups];
-  // backward compat: set image/mockup to first item
+  obj.images = [...tempImages];  // IDB keys
+  obj.mockups = [...tempMockups]; // IDB keys
   obj.image = tempImages[0] || null;
   obj.mockup = tempMockups[0] || null;
 
@@ -893,9 +963,11 @@ function handlePasteMulti(e, type) {
 function readFileToArray(file, type) {
   const reader = new FileReader();
   reader.onload = function(e) {
-    compressImage(e.target.result, 800, 0.7, function(compressed) {
-      if (type === 'images') tempImages.push(compressed);
-      else tempMockups.push(compressed);
+    compressImage(e.target.result, 800, 0.7, async function(compressed) {
+      const key = imgKey();
+      await idbPut(key, compressed);
+      if (type === 'images') tempImages.push(key);
+      else tempMockups.push(key);
       renderGallery(type);
     });
   };
@@ -919,21 +991,27 @@ function compressImage(dataUrl, maxDim, quality, cb) {
   img.src = dataUrl;
 }
 
-function removeGalleryImage(type, idx) {
-  if (type === 'images') tempImages.splice(idx, 1);
-  else tempMockups.splice(idx, 1);
+async function removeGalleryImage(type, idx) {
+  const arr = type === 'images' ? tempImages : tempMockups;
+  const key = arr[idx];
+  arr.splice(idx, 1);
+  if (key && key.startsWith('img_')) await idbDelete(key).catch(() => {});
   renderGallery(type);
 }
 
-function renderGallery(type) {
+async function renderGallery(type) {
   const arr = type === 'images' ? tempImages : tempMockups;
   const el = document.getElementById(type === 'images' ? 'pImgGallery' : 'pMockupGallery');
-  el.innerHTML = arr.map((src, i) => `
-    <div class="img-thumb-wrap">
-      <img src="${src}">
-      <button type="button" class="img-delete-btn" onclick="removeGalleryImage('${type}',${i})">✕</button>
-    </div>
-  `).join('');
+  el.innerHTML = '';
+  for (let i = 0; i < arr.length; i++) {
+    const key = arr[i];
+    const src = key.startsWith('data:') ? key : (await idbGet(key).catch(() => null));
+    if (!src) continue;
+    const div = document.createElement('div');
+    div.className = 'img-thumb-wrap';
+    div.innerHTML = `<img src="${src}"><button type="button" class="img-delete-btn" onclick="removeGalleryImage('${type}',${i})">✕</button>`;
+    el.appendChild(div);
+  }
 }
 
 // ---- ORDERING ----

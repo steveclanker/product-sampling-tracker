@@ -201,6 +201,16 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
   transition: all 0.2s;
 }
 .upload-btn:hover { background: #F1F5F9; border-color: var(--accent); color: var(--text); }
+.img-preview-wrap { position: relative; display: inline-block; margin-top: 8px; }
+.img-preview-wrap .img-preview { display: block; margin-top: 0; }
+.img-delete-btn {
+  position: absolute; top: 6px; right: 6px; width: 28px; height: 28px;
+  border: none; border-radius: 50%; background: rgba(0,0,0,0.6); color: white;
+  cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center;
+  opacity: 0; transition: opacity 0.2s;
+}
+.img-preview-wrap:hover .img-delete-btn { opacity: 1; }
+.img-delete-btn:hover { background: var(--danger); }
 .img-preview { max-width: 100%; max-height: 200px; border-radius: 8px; margin-top: 8px; }
 
 /* Ordering View */
@@ -347,7 +357,10 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
           <button type="button" class="upload-btn" onclick="event.stopPropagation();document.getElementById('pImgFile').click()">📁 Upload from computer</button>
           <input type="file" id="pImgFile" accept="image/*" style="display:none" onchange="handleImgUpload(this,'pImgPreview')">
         </div>
-        <img id="pImgPreview" class="img-preview" style="display:none">
+        <div class="img-preview-wrap" id="pImgPreviewWrap" style="display:none">
+          <img id="pImgPreview" class="img-preview">
+          <button type="button" class="img-delete-btn" onclick="clearImage('pImgPreview','pImgPreviewWrap','pImgFile')">🗑️</button>
+        </div>
       </div>
       <div class="form-group">
         <label class="form-label">Mockup Image (logo placement)</label>
@@ -357,7 +370,10 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
           <button type="button" class="upload-btn" onclick="event.stopPropagation();document.getElementById('pMockupFile').click()">📁 Upload from computer</button>
           <input type="file" id="pMockupFile" accept="image/*" style="display:none" onchange="handleImgUpload(this,'pMockupPreview')">
         </div>
-        <img id="pMockupPreview" class="img-preview" style="display:none">
+        <div class="img-preview-wrap" id="pMockupPreviewWrap" style="display:none">
+          <img id="pMockupPreview" class="img-preview">
+          <button type="button" class="img-delete-btn" onclick="clearImage('pMockupPreview','pMockupPreviewWrap','pMockupFile')">🗑️</button>
+        </div>
       </div>
       <div class="form-group">
         <label class="form-label">Notes</label>
@@ -869,9 +885,17 @@ function readFileToPreview(file, previewId) {
   reader.onload = function(e) {
     const preview = document.getElementById(previewId);
     preview.src = e.target.result;
-    preview.style.display = 'block';
+    const wrap = document.getElementById(previewId + 'Wrap');
+    if (wrap) wrap.style.display = 'inline-block';
+    else preview.style.display = 'block';
   };
   reader.readAsDataURL(file);
+}
+
+function clearImage(previewId, wrapId, fileInputId) {
+  document.getElementById(previewId).src = '';
+  document.getElementById(wrapId).style.display = 'none';
+  document.getElementById(fileInputId).value = '';
 }
 
 // ---- ORDERING ----

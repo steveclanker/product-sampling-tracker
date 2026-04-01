@@ -195,6 +195,12 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .img-upload-area:hover, .img-upload-area.paste-active { border-color: var(--accent); background: #F8FAFF; }
 .img-upload-area.paste-active { border-color: var(--success); background: #ECFDF5; }
 .paste-hint { font-size: 11px; color: var(--text-light); margin-top: 4px; }
+.upload-btn {
+  margin-top: 8px; padding: 6px 14px; border: 1px solid var(--border); border-radius: 6px;
+  background: white; cursor: pointer; font-size: 12px; color: var(--text-muted);
+  transition: all 0.2s;
+}
+.upload-btn:hover { background: #F1F5F9; border-color: var(--accent); color: var(--text); }
 .img-preview { max-width: 100%; max-height: 200px; border-radius: 8px; margin-top: 8px; }
 
 /* Ordering View */
@@ -335,19 +341,21 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
       </div>
       <div class="form-group">
         <label class="form-label">Product Image</label>
-        <div class="img-upload-area" id="pImgArea" tabindex="0" onclick="document.getElementById('pImgFile').click()" onpaste="handlePaste(event,'pImgPreview')" onfocus="this.classList.add('paste-active')" onblur="this.classList.remove('paste-active')">
-          <div>Click to upload or paste image (Ctrl/Cmd+V)</div>
-          <div class="paste-hint">Click here first, then paste from clipboard</div>
+        <div class="img-upload-area" id="pImgArea" tabindex="0" onpaste="handlePaste(event,'pImgPreview')" onfocus="this.classList.add('paste-active')" onblur="this.classList.remove('paste-active')">
+          <div>📋 Click here, then Ctrl/Cmd+V to paste</div>
+          <div class="paste-hint">or use the upload button below</div>
+          <button type="button" class="upload-btn" onclick="event.stopPropagation();document.getElementById('pImgFile').click()">📁 Upload from computer</button>
           <input type="file" id="pImgFile" accept="image/*" style="display:none" onchange="handleImgUpload(this,'pImgPreview')">
         </div>
         <img id="pImgPreview" class="img-preview" style="display:none">
       </div>
       <div class="form-group">
         <label class="form-label">Mockup Image (logo placement)</label>
-        <div class="img-upload-area" id="pMockupArea" tabindex="0" onclick="document.getElementById('pMockupFile').click()" onpaste="handlePaste(event,'pMockupPreview')" onfocus="this.classList.add('paste-active')" onblur="this.classList.remove('paste-active')">
-          <div>Click to upload or paste mockup (Ctrl/Cmd+V)</div>
-          <div class="paste-hint">Click here first, then paste from clipboard</div>
-          <input type="file" id="pMockupFile" accept="image/*" style="display:none" onchange="handlePaste(event,'pMockupPreview')">
+        <div class="img-upload-area" id="pMockupArea" tabindex="0" onpaste="handlePaste(event,'pMockupPreview')" onfocus="this.classList.add('paste-active')" onblur="this.classList.remove('paste-active')">
+          <div>📋 Click here, then Ctrl/Cmd+V to paste</div>
+          <div class="paste-hint">or use the upload button below</div>
+          <button type="button" class="upload-btn" onclick="event.stopPropagation();document.getElementById('pMockupFile').click()">📁 Upload from computer</button>
+          <input type="file" id="pMockupFile" accept="image/*" style="display:none" onchange="handleImgUpload(this,'pMockupPreview')">
         </div>
         <img id="pMockupPreview" class="img-preview" style="display:none">
       </div>

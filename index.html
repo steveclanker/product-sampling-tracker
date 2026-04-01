@@ -431,7 +431,18 @@ function loadData() {
   if (raw) return JSON.parse(raw);
   return { suppliers: [], products: [] };
 }
-function saveData(data) { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); }
+function saveData(data) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  } catch(e) {
+    if (e.name === 'QuotaExceededError' || e.code === 22) {
+      alert('Storage full - too many images. Try removing some images and saving again.');
+    } else {
+      alert('Save failed: ' + e.message);
+    }
+    throw e;
+  }
+}
 function genId() { return Date.now().toString(36) + Math.random().toString(36).substr(2,6); }
 
 // ---- RENDER ----
@@ -873,11 +884,30 @@ function handlePasteMulti(e, type) {
 function readFileToArray(file, type) {
   const reader = new FileReader();
   reader.onload = function(e) {
-    if (type === 'images') tempImages.push(e.target.result);
-    else tempMockups.push(e.target.result);
-    renderGallery(type);
+    compressImage(e.target.result, 800, 0.7, function(compressed) {
+      if (type === 'images') tempImages.push(compressed);
+      else tempMockups.push(compressed);
+      renderGallery(type);
+    });
   };
   reader.readAsDataURL(file);
+}
+
+function compressImage(dataUrl, maxDim, quality, cb) {
+  const img = new Image();
+  img.onload = function() {
+    let w = img.width, h = img.height;
+    if (w > maxDim || h > maxDim) {
+      if (w > h) { h = Math.round(h * maxDim / w); w = maxDim; }
+      else { w = Math.round(w * maxDim / h); h = maxDim; }
+    }
+    const canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+    cb(canvas.toDataURL('image/jpeg', quality));
+  };
+  img.onerror = function() { cb(dataUrl); };
+  img.src = dataUrl;
 }
 
 function removeGalleryImage(type, idx) {

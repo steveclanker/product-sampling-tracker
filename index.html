@@ -192,7 +192,9 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
   border: 2px dashed var(--border); border-radius: 10px; padding: 24px;
   text-align: center; cursor: pointer; transition: all 0.2s;
 }
-.img-upload-area:hover { border-color: var(--accent); background: #F8FAFF; }
+.img-upload-area:hover, .img-upload-area.paste-active { border-color: var(--accent); background: #F8FAFF; }
+.img-upload-area.paste-active { border-color: var(--success); background: #ECFDF5; }
+.paste-hint { font-size: 11px; color: var(--text-light); margin-top: 4px; }
 .img-preview { max-width: 100%; max-height: 200px; border-radius: 8px; margin-top: 8px; }
 
 /* Ordering View */
@@ -333,17 +335,19 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
       </div>
       <div class="form-group">
         <label class="form-label">Product Image</label>
-        <div class="img-upload-area" onclick="document.getElementById('pImgFile').click()">
-          <div>Click to upload or drag image</div>
+        <div class="img-upload-area" id="pImgArea" tabindex="0" onclick="document.getElementById('pImgFile').click()" onpaste="handlePaste(event,'pImgPreview')" onfocus="this.classList.add('paste-active')" onblur="this.classList.remove('paste-active')">
+          <div>Click to upload or paste image (Ctrl/Cmd+V)</div>
+          <div class="paste-hint">Click here first, then paste from clipboard</div>
           <input type="file" id="pImgFile" accept="image/*" style="display:none" onchange="handleImgUpload(this,'pImgPreview')">
         </div>
         <img id="pImgPreview" class="img-preview" style="display:none">
       </div>
       <div class="form-group">
         <label class="form-label">Mockup Image (logo placement)</label>
-        <div class="img-upload-area" onclick="document.getElementById('pMockupFile').click()">
-          <div>Click to upload mockup</div>
-          <input type="file" id="pMockupFile" accept="image/*" style="display:none" onchange="handleImgUpload(this,'pMockupPreview')">
+        <div class="img-upload-area" id="pMockupArea" tabindex="0" onclick="document.getElementById('pMockupFile').click()" onpaste="handlePaste(event,'pMockupPreview')" onfocus="this.classList.add('paste-active')" onblur="this.classList.remove('paste-active')">
+          <div>Click to upload or paste mockup (Ctrl/Cmd+V)</div>
+          <div class="paste-hint">Click here first, then paste from clipboard</div>
+          <input type="file" id="pMockupFile" accept="image/*" style="display:none" onchange="handlePaste(event,'pMockupPreview')">
         </div>
         <img id="pMockupPreview" class="img-preview" style="display:none">
       </div>
@@ -832,10 +836,27 @@ function renderChangeTags() {
   ).join('');
 }
 
-// ---- IMAGE UPLOAD ----
+// ---- IMAGE UPLOAD & PASTE ----
 function handleImgUpload(input, previewId) {
   const file = input.files[0];
   if (!file) return;
+  readFileToPreview(file, previewId);
+}
+
+function handlePaste(e, previewId) {
+  e.preventDefault();
+  e.stopPropagation();
+  const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+  for (const item of items) {
+    if (item.type.indexOf('image') !== -1) {
+      const file = item.getAsFile();
+      readFileToPreview(file, previewId);
+      return;
+    }
+  }
+}
+
+function readFileToPreview(file, previewId) {
   const reader = new FileReader();
   reader.onload = function(e) {
     const preview = document.getElementById(previewId);

@@ -201,15 +201,17 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
   transition: all 0.2s;
 }
 .upload-btn:hover { background: #F1F5F9; border-color: var(--accent); color: var(--text); }
-.img-preview-wrap { position: relative; display: inline-block; margin-top: 8px; }
-.img-preview-wrap .img-preview { display: block; margin-top: 0; }
+.img-gallery { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+.img-gallery:empty { display: none; margin: 0; }
+.img-thumb-wrap { position: relative; display: inline-block; }
+.img-thumb-wrap img { width: 100px; height: 100px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border); }
 .img-delete-btn {
-  position: absolute; top: 6px; right: 6px; width: 28px; height: 28px;
+  position: absolute; top: 4px; right: 4px; width: 24px; height: 24px;
   border: none; border-radius: 50%; background: rgba(0,0,0,0.6); color: white;
-  cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center;
-  opacity: 0; transition: opacity 0.2s;
+  cursor: pointer; font-size: 12px; display: flex; align-items: center; justify-content: center;
+  opacity: 0; transition: opacity 0.2s; line-height: 1;
 }
-.img-preview-wrap:hover .img-delete-btn { opacity: 1; }
+.img-thumb-wrap:hover .img-delete-btn { opacity: 1; }
 .img-delete-btn:hover { background: var(--danger); }
 .img-preview { max-width: 100%; max-height: 200px; border-radius: 8px; margin-top: 8px; }
 
@@ -350,29 +352,23 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
         <input class="form-input" id="pQty" type="number" placeholder="e.g. 1" value="1">
       </div>
       <div class="form-group">
-        <label class="form-label">Product Image</label>
-        <div class="img-upload-area" id="pImgArea" tabindex="0" onpaste="handlePaste(event,'pImgPreview')" onfocus="this.classList.add('paste-active')" onblur="this.classList.remove('paste-active')">
+        <label class="form-label">Product Images</label>
+        <div class="img-gallery" id="pImgGallery"></div>
+        <div class="img-upload-area" id="pImgArea" tabindex="0" onpaste="handlePasteMulti(event,'images')" onfocus="this.classList.add('paste-active')" onblur="this.classList.remove('paste-active')">
           <div>📋 Click here, then Ctrl/Cmd+V to paste</div>
           <div class="paste-hint">or use the upload button below</div>
           <button type="button" class="upload-btn" onclick="event.stopPropagation();document.getElementById('pImgFile').click()">📁 Upload from computer</button>
-          <input type="file" id="pImgFile" accept="image/*" style="display:none" onchange="handleImgUpload(this,'pImgPreview')">
-        </div>
-        <div class="img-preview-wrap" id="pImgPreviewWrap" style="display:none">
-          <img id="pImgPreview" class="img-preview">
-          <button type="button" class="img-delete-btn" onclick="clearImage('pImgPreview','pImgPreviewWrap','pImgFile')">🗑️</button>
+          <input type="file" id="pImgFile" accept="image/*" multiple style="display:none" onchange="handleMultiUpload(this,'images')">
         </div>
       </div>
       <div class="form-group">
-        <label class="form-label">Mockup Image (logo placement)</label>
-        <div class="img-upload-area" id="pMockupArea" tabindex="0" onpaste="handlePaste(event,'pMockupPreview')" onfocus="this.classList.add('paste-active')" onblur="this.classList.remove('paste-active')">
+        <label class="form-label">Mockup Images (logo placement)</label>
+        <div class="img-gallery" id="pMockupGallery"></div>
+        <div class="img-upload-area" id="pMockupArea" tabindex="0" onpaste="handlePasteMulti(event,'mockups')" onfocus="this.classList.add('paste-active')" onblur="this.classList.remove('paste-active')">
           <div>📋 Click here, then Ctrl/Cmd+V to paste</div>
           <div class="paste-hint">or use the upload button below</div>
           <button type="button" class="upload-btn" onclick="event.stopPropagation();document.getElementById('pMockupFile').click()">📁 Upload from computer</button>
-          <input type="file" id="pMockupFile" accept="image/*" style="display:none" onchange="handleImgUpload(this,'pMockupPreview')">
-        </div>
-        <div class="img-preview-wrap" id="pMockupPreviewWrap" style="display:none">
-          <img id="pMockupPreview" class="img-preview">
-          <button type="button" class="img-delete-btn" onclick="clearImage('pMockupPreview','pMockupPreviewWrap','pMockupFile')">🗑️</button>
+          <input type="file" id="pMockupFile" accept="image/*" multiple style="display:none" onchange="handleMultiUpload(this,'mockups')">
         </div>
       </div>
       <div class="form-group">
@@ -522,8 +518,9 @@ function renderProductCard(p) {
   return `
     <div class="product-card">
       <div class="product-img-wrap">
-        ${p.image ? `<img src="${p.image}" alt="${p.name}">` : '<div class="product-img-placeholder">No image</div>'}
-        ${p.mockup ? '<div class="mockup-badge">MOCKUP</div>' : ''}
+        ${(p.images && p.images.length) ? `<img src="${p.images[0]}" alt="${p.name}">` : (p.image ? `<img src="${p.image}" alt="${p.name}">` : '<div class="product-img-placeholder">No image</div>')}
+        ${(p.images && p.images.length > 1) ? `<div class="mockup-badge">${p.images.length} imgs</div>` : ''}
+        ${(p.mockups && p.mockups.length) || p.mockup ? '<div class="mockup-badge" style="right:auto;left:8px">MOCKUP</div>' : ''}
       </div>
       <div class="product-info">
         <div class="product-name">${p.name}</div>
@@ -635,10 +632,13 @@ function renderSupplierView() {
               <h4>Requested Changes</h4>
               ${p.changes.map(c => `<div class="change-item">${c}</div>`).join('')}
             ` : ''}
-            ${p.mockup ? `
+            ${(p.mockups && p.mockups.length) ? `
+              <h4 style="margin-top:12px">Mockup References</h4>
+              <div class="sv-mockup-row">${p.mockups.map(m => `<img class="sv-mockup" src="${m}">`).join('')}</div>
+            ` : (p.mockup ? `
               <h4 style="margin-top:12px">Mockup Reference</h4>
               <div class="sv-mockup-row"><img class="sv-mockup" src="${p.mockup}"></div>
-            ` : ''}
+            ` : '')}
           </div>
         ` : ''}
       </div>
@@ -740,12 +740,8 @@ function openAddProduct() {
   document.getElementById('pStatus').value = 'requested';
   document.getElementById('pQty').value = '1';
   document.getElementById('pNotes').value = '';
-  document.getElementById('pImgPreview').style.display = 'none';
-  document.getElementById('pImgPreview').src = '';
-  document.getElementById('pMockupPreview').style.display = 'none';
-  document.getElementById('pMockupPreview').src = '';
-  document.getElementById('pImgFile').value = '';
-  document.getElementById('pMockupFile').value = '';
+  tempImages = []; tempMockups = [];
+  renderGallery('images'); renderGallery('mockups');
   renderChangeTags();
   populateSupplierSelect();
   openModal('productModal');
@@ -766,14 +762,10 @@ function editProduct(id) {
   document.getElementById('pQty').value = p.qty || 1;
   document.getElementById('pNotes').value = p.notes || '';
 
-  const imgPrev = document.getElementById('pImgPreview');
-  if (p.image) { imgPrev.src = p.image; imgPrev.style.display = 'block'; }
-  else { imgPrev.style.display = 'none'; imgPrev.src = ''; }
-
-  const mockPrev = document.getElementById('pMockupPreview');
-  if (p.mockup) { mockPrev.src = p.mockup; mockPrev.style.display = 'block'; }
-  else { mockPrev.style.display = 'none'; mockPrev.src = ''; }
-
+  // Load multi-images (backward compat with single image field)
+  tempImages = p.images ? [...p.images] : (p.image ? [p.image] : []);
+  tempMockups = p.mockups ? [...p.mockups] : (p.mockup ? [p.mockup] : []);
+  renderGallery('images'); renderGallery('mockups');
   renderChangeTags();
   populateSupplierSelect(p.supplierId);
   openModal('productModal');
@@ -794,21 +786,18 @@ function saveProduct() {
     supplierId: supplierId,
   };
 
-  const imgPrev = document.getElementById('pImgPreview');
-  if (imgPrev.src && imgPrev.style.display !== 'none') obj.image = imgPrev.src;
-  const mockPrev = document.getElementById('pMockupPreview');
-  if (mockPrev.src && mockPrev.style.display !== 'none') obj.mockup = mockPrev.src;
+  obj.images = [...tempImages];
+  obj.mockups = [...tempMockups];
+  // backward compat: set image/mockup to first item
+  obj.image = tempImages[0] || null;
+  obj.mockup = tempMockups[0] || null;
 
   if (!obj.name) { alert('Product name required'); return; }
   if (!supplierId) { alert('Select a supplier'); return; }
 
   if (editingProductId) {
     const idx = data.products.findIndex(p => p.id === editingProductId);
-    if (idx >= 0) {
-      if (!obj.image && data.products[idx].image) obj.image = data.products[idx].image;
-      if (!obj.mockup && data.products[idx].mockup) obj.mockup = data.products[idx].mockup;
-      Object.assign(data.products[idx], obj);
-    }
+    if (idx >= 0) Object.assign(data.products[idx], obj);
   } else {
     obj.id = genId();
     obj.createdAt = new Date().toISOString();
@@ -860,42 +849,52 @@ function renderChangeTags() {
   ).join('');
 }
 
-// ---- IMAGE UPLOAD & PASTE ----
-function handleImgUpload(input, previewId) {
-  const file = input.files[0];
-  if (!file) return;
-  readFileToPreview(file, previewId);
+// ---- MULTI-IMAGE UPLOAD & PASTE ----
+let tempImages = [];
+let tempMockups = [];
+
+function handleMultiUpload(input, type) {
+  const files = Array.from(input.files);
+  files.forEach(f => readFileToArray(f, type));
+  input.value = '';
 }
 
-function handlePaste(e, previewId) {
+function handlePasteMulti(e, type) {
   e.preventDefault();
   e.stopPropagation();
   const items = (e.clipboardData || e.originalEvent.clipboardData).items;
   for (const item of items) {
     if (item.type.indexOf('image') !== -1) {
-      const file = item.getAsFile();
-      readFileToPreview(file, previewId);
-      return;
+      readFileToArray(item.getAsFile(), type);
     }
   }
 }
 
-function readFileToPreview(file, previewId) {
+function readFileToArray(file, type) {
   const reader = new FileReader();
   reader.onload = function(e) {
-    const preview = document.getElementById(previewId);
-    preview.src = e.target.result;
-    const wrap = document.getElementById(previewId + 'Wrap');
-    if (wrap) wrap.style.display = 'inline-block';
-    else preview.style.display = 'block';
+    if (type === 'images') tempImages.push(e.target.result);
+    else tempMockups.push(e.target.result);
+    renderGallery(type);
   };
   reader.readAsDataURL(file);
 }
 
-function clearImage(previewId, wrapId, fileInputId) {
-  document.getElementById(previewId).src = '';
-  document.getElementById(wrapId).style.display = 'none';
-  document.getElementById(fileInputId).value = '';
+function removeGalleryImage(type, idx) {
+  if (type === 'images') tempImages.splice(idx, 1);
+  else tempMockups.splice(idx, 1);
+  renderGallery(type);
+}
+
+function renderGallery(type) {
+  const arr = type === 'images' ? tempImages : tempMockups;
+  const el = document.getElementById(type === 'images' ? 'pImgGallery' : 'pMockupGallery');
+  el.innerHTML = arr.map((src, i) => `
+    <div class="img-thumb-wrap">
+      <img src="${src}">
+      <button type="button" class="img-delete-btn" onclick="removeGalleryImage('${type}',${i})">✕</button>
+    </div>
+  `).join('');
 }
 
 // ---- ORDERING ----

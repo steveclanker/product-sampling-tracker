@@ -433,14 +433,23 @@ function loadData() {
 }
 function saveData(data) {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    const json = JSON.stringify(data);
+    localStorage.setItem(STORAGE_KEY, json);
   } catch(e) {
     if (e.name === 'QuotaExceededError' || e.code === 22) {
-      alert('Storage full - too many images. Try removing some images and saving again.');
-    } else {
-      alert('Save failed: ' + e.message);
+      // Try saving without images as fallback
+      const lite = JSON.parse(JSON.stringify(data));
+      lite.products.forEach(p => { p.images = []; p.mockups = []; p.image = null; p.mockup = null; });
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(lite));
+        alert('Storage full - saved without images. Consider removing some product images to free space.');
+        return;
+      } catch(e2) {
+        alert('Storage completely full. Try deleting some products first.');
+        return;
+      }
     }
-    throw e;
+    alert('Save failed: ' + e.message);
   }
 }
 function genId() { return Date.now().toString(36) + Math.random().toString(36).substr(2,6); }

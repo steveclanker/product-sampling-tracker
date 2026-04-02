@@ -278,6 +278,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
       <button class="topbar-btn" onclick="openAddSupplier()">+ Supplier</button>
       <button class="topbar-btn primary" onclick="openAddProduct()">+ Product</button>
       <button class="topbar-btn" onclick="exportData()">Export</button>
+      <button class="topbar-btn" onclick="configureYupooProxy()" title="Configure Yupoo proxy URL">⚙️</button>
     </div>
   </div>
 </div>
@@ -445,6 +446,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .yupoo-thumb img { width:100%; height:100%; object-fit:cover; display:block; }
 .yupoo-thumb .yupoo-check { position:absolute; top:6px; right:6px; width:22px; height:22px; border-radius:50%; background:rgba(0,0,0,0.4); display:flex; align-items:center; justify-content:center; font-size:13px; color:white; transition:background 0.15s; }
 .yupoo-thumb.selected .yupoo-check { background:var(--accent); }
+.yupoo-thumb.blank { opacity: 0.4; border-color: var(--danger); }
+.yupoo-thumb.blank .yupoo-check { background: var(--danger); font-size: 15px; }
 </style>
 <script>
 const STORAGE_KEY = 'laHauteProductSampling';
@@ -1019,7 +1022,7 @@ function compressImage(dataUrl, maxDim, quality, cb) {
 }
 
 // ---- Yupoo Import ----
-const YUPOO_PROXY = 'https://aims-prostores-grant-five.trycloudflare.com';
+const YUPOO_PROXY = localStorage.getItem('yupooProxyUrl') || 'https://quiet-seems-transmitted-marion.trycloudflare.com';
 let yupooResults = []; // [{thumb, full, id, selected}]
 
 async function fetchYupooImages() {
@@ -1041,11 +1044,17 @@ async function fetchYupooImages() {
       document.getElementById('yupooGrid').style.display = 'none';
       return;
     }
-    yupooResults = data.images.map(img => ({...img, selected: true}));
+    yupooResults = data.images.map(img => ({...img, selected: true, isBlank: false}));
     renderYupooGrid();
-    showYupooStatus(`Found ${data.images.length} images - review and select the ones you want`, 'success');
+    showYupooStatus(`Found ${data.images.length} images - scanning for blanks...`, 'success');
+    // Wait for thumbnails to load, then auto-detect blanks
+    setTimeout(() => autoDetectBlanks(), 1500);
   } catch(e) {
-    showYupooStatus('Failed to fetch: ' + e.message, 'error');
+    let errMsg = e.message;
+    if (errMsg.includes('Failed to fetch') || errMsg.includes('NetworkError')) {
+      errMsg = 'Cannot reach proxy server. Check the proxy URL in settings (⚙️) and make sure the tunnel is running.';
+    }
+    showYupooStatus('Failed to fetch: ' + errMsg, 'error');
     document.getElementById('yupooGrid').style.display = 'none';
   } finally {
     btn.disabled = false; btn.textContent = '🔍 Fetch Images';
@@ -1069,9 +1078,9 @@ function renderYupooGrid() {
   grid.style.display = 'block';
   count.textContent = `${yupooResults.length} images found`;
   imgContainer.innerHTML = yupooResults.map((img, i) => `
-    <div class="yupoo-thumb ${img.selected ? 'selected' : ''}" onclick="toggleYupooImage(${i})">
-      <img src="${YUPOO_PROXY}/proxy-image?url=${encodeURIComponent(img.thumb)}" loading="lazy" onerror="this.src='${img.thumb}'">
-      <div class="yupoo-check">${img.selected ? '✓' : ''}</div>
+    <div class="yupoo-thumb ${img.selected ? 'selected' : ''} ${img.isBlank ? 'blank' : ''}" onclick="toggleYupooImage(${i})" title="${img.isBlank ? 'Auto-detected as blank' : ''}">
+      <img src="${YUPOO_PROXY}/proxy-image?url=${encodeURIComponent(img.thumb)}" crossorigin="anonymous" loading="lazy" onerror="this.src='${img.thumb}'">
+      <div class="yupoo-check">${img.isBlank ? '⊘' : (img.selected ? '✓' : '')}</div>
     </div>
   `).join('');
 }
@@ -1081,19 +1090,99 @@ function toggleYupooImage(idx) {
   renderYupooGrid();
 }
 
-function yupooSelectAll() { yupooResults.forEach(r => r.selected = true); renderYupooGrid(); }
+function yupooSelectAll() { yupooResults.forEach(r => { if (!r.isBlank) r.selected = true; }); renderYupooGrid(); }
 function yupooDeselectAll() { yupooResults.forEach(r => r.selected = false); renderYupooGrid(); }
+
+// Blank image detection - checks if image is mostly white/empty/uniform colour
+function isBlankImage(imgEl) {
+  return new Promise((resolve) => {
+    try {
+      const canvas = document.createElement('canvas');
+      const size = 40; // sample at low res for speed
+      canvas.width = size; canvas.height = size;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(imgEl, 0, 0, size, size);
+      const data = ctx.getImageData(0, 0, size, size).data;
+      const totalPixels = size * size;
+      let whiteCount = 0;
+      let uniformCount = 0;
+      const firstR = data[0], firstG = data[1], firstB = data[2];
+      
+      for (let i = 0; i < data.length; i += 4) {
+        const r = data[i], g = data[i+1], b = data[i+2], a = data[i+3];
+        // Count near-white pixels (RGB all above 245) or fully transparent
+        if ((r > 245 && g > 245 && b > 245) || a < 10) whiteCount++;
+        // Count pixels matching the first pixel (uniform/solid colour)
+        if (Math.abs(r - firstR) < 15 && Math.abs(g - firstG) < 15 && Math.abs(b - firstB) < 15) uniformCount++;
+      }
+      
+      const whiteRatio = whiteCount / totalPixels;
+      const uniformRatio = uniformCount / totalPixels;
+      // Blank if >92% white/transparent OR >96% a single uniform colour
+      resolve(whiteRatio > 0.92 || uniformRatio > 0.96);
+    } catch(e) {
+      resolve(false); // CORS or other error - assume not blank
+    }
+  });
+}
+
+async function autoDetectBlanks() {
+  const thumbs = document.querySelectorAll('#yupooImages .yupoo-thumb img');
+  let blankCount = 0;
+  const checks = [];
+  
+  thumbs.forEach((img, i) => {
+    if (i >= yupooResults.length) return;
+    const check = new Promise(resolve => {
+      if (img.complete && img.naturalWidth > 0) {
+        isBlankImage(img).then(blank => {
+          if (blank) { yupooResults[i].selected = false; yupooResults[i].isBlank = true; blankCount++; }
+          resolve();
+        });
+      } else {
+        img.onload = () => {
+          isBlankImage(img).then(blank => {
+            if (blank) { yupooResults[i].selected = false; yupooResults[i].isBlank = true; blankCount++; }
+            resolve();
+          });
+        };
+        img.onerror = () => resolve();
+        // Timeout after 5s
+        setTimeout(resolve, 5000);
+      }
+    });
+    checks.push(check);
+  });
+  
+  await Promise.all(checks);
+  if (blankCount > 0) {
+    renderYupooGrid();
+    showYupooStatus(`Auto-deselected ${blankCount} blank/empty image${blankCount > 1 ? 's' : ''}. ${yupooResults.filter(r => r.selected).length} remaining.`, 'info');
+  }
+}
 
 async function yupooAddSelected() {
   const selected = yupooResults.filter(r => r.selected);
   if (!selected.length) { showYupooStatus('No images selected', 'warning'); return; }
   showYupooStatus(`Adding ${selected.length} images...`, 'info');
   
+  let added = 0, failed = 0;
   for (const img of selected) {
     try {
-      // Fetch the full-size image through proxy, convert to data URL, compress, store in IDB
-      const res = await fetch(`${YUPOO_PROXY}/proxy-image?url=${encodeURIComponent(img.full)}`);
-      const blob = await res.blob();
+      // Try full size first, fall back to thumb
+      let blob;
+      for (const tryUrl of [img.full, img.thumb]) {
+        try {
+          const res = await fetch(`${YUPOO_PROXY}/proxy-image?url=${encodeURIComponent(tryUrl)}`);
+          if (!res.ok) continue;
+          blob = await res.blob();
+          // Skip tiny blobs (likely error pages or 1x1 pixels)
+          if (blob.size < 500) { blob = null; continue; }
+          break;
+        } catch(e) { continue; }
+      }
+      if (!blob) { failed++; continue; }
+      
       const dataUrl = await new Promise(resolve => {
         const reader = new FileReader();
         reader.onload = () => resolve(reader.result);
@@ -1108,13 +1197,18 @@ async function yupooAddSelected() {
           resolve();
         });
       });
+      added++;
     } catch(e) {
       console.warn('Failed to import image:', img.full, e);
+      failed++;
     }
+    // Update progress
+    showYupooStatus(`Adding images... ${added + failed}/${selected.length}`, 'info');
   }
   
   renderGallery('images');
-  showYupooStatus(`Added ${selected.length} images to product`, 'success');
+  const msg = failed > 0 ? `Added ${added} images (${failed} failed to download)` : `Added ${added} images to product`;
+  showYupooStatus(msg, failed > 0 ? 'warning' : 'success');
   // Clear the yupoo grid
   setTimeout(() => {
     document.getElementById('yupooGrid').style.display = 'none';

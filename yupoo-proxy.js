@@ -104,16 +104,16 @@ async function scrapeYupoo(yupooUrl) {
   
   // Strategy 2: Extract image URLs directly from HTML/JS
   if (images.length === 0) {
-    // Look for photo.yupoo.com image URLs in page source
-    const photoRegex = /(?:https?:)?\/\/photo\.yupoo\.com\/([^'")\s]+)/g;
+    // Look for photo.yupoo.com or any yupoo image CDN URLs in page source
+    const photoRegex = /(?:https?:)?\/\/(?:photo|img)\.yupoo\.com\/([^'")\s]+)/g;
     const seen = new Set();
     let match;
     while ((match = photoRegex.exec(html)) !== null) {
       const path = match[1];
-      // Skip icons and logos
-      if (path.includes('icon') || path.includes('logo')) continue;
+      // Skip icons, logos, avatars, and tiny UI elements
+      if (path.includes('icon') || path.includes('logo') || path.includes('avatar') || path.includes('badge')) continue;
       // Normalise to get the base file path (remove size suffix)
-      const basePath = path.replace(/\/(small|medium|big|origphotos|thumb_\d+)\.jpg.*/, '');
+      const basePath = path.replace(/\/(small|medium|big|origphotos|thumb_\d+|square)\.jpg.*/, '');
       if (seen.has(basePath)) continue;
       seen.add(basePath);
       images.push({
@@ -187,16 +187,46 @@ const server = http.createServer(async (req, res) => {
     try {
       const fullUrl = imgUrl.startsWith('//') ? 'https:' + imgUrl : imgUrl;
       const proto = fullUrl.startsWith('https') ? https : http;
-      proto.get(fullUrl, {
-        headers: { 'User-Agent': 'Mozilla/5.0', 'Referer': 'https://x.yupoo.com/' }
+      const proxyReq = proto.get(fullUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Referer': 'https://x.yupoo.com/',
+          'Accept': 'image/webp,image/apng,image/*,*/*;q=0.8'
+        }
       }, (proxyRes) => {
-        res.writeHead(proxyRes.statusCode, {
+        // Follow redirects for images too
+        if (proxyRes.statusCode >= 300 && proxyRes.statusCode < 400 && proxyRes.headers.location) {
+          const redirectUrl = proxyRes.headers.location.startsWith('//') ? 'https:' + proxyRes.headers.location : proxyRes.headers.location;
+          const rProto = redirectUrl.startsWith('https') ? https : http;
+          rProto.get(redirectUrl, {
+            headers: { 'User-Agent': 'Mozilla/5.0', 'Referer': 'https://x.yupoo.com/' }
+          }, (rRes) => {
+            res.writeHead(rRes.statusCode, {
+              'Content-Type': rRes.headers['content-type'] || 'image/jpeg',
+              'Cache-Control': 'public, max-age=86400',
+              'Access-Control-Allow-Origin': '*'
+            });
+            rRes.pipe(res);
+          }).on('error', () => { res.writeHead(502); res.end('Redirect proxy error'); });
+          return;
+        }
+        // Return error info for non-200 so frontend can detect failures
+        if (proxyRes.statusCode !== 200) {
+          res.writeHead(proxyRes.statusCode, { 'Access-Control-Allow-Origin': '*' });
+          res.end('Image fetch failed: ' + proxyRes.statusCode);
+          return;
+        }
+        res.writeHead(200, {
           'Content-Type': proxyRes.headers['content-type'] || 'image/jpeg',
-          'Cache-Control': 'public, max-age=86400'
+          'Content-Length': proxyRes.headers['content-length'] || '',
+          'Cache-Control': 'public, max-age=86400',
+          'Access-Control-Allow-Origin': '*'
         });
         proxyRes.pipe(res);
-      }).on('error', (e) => { res.writeHead(502); res.end('Proxy error'); });
-    } catch(e) { res.writeHead(500); res.end('Error'); }
+      });
+      proxyReq.on('error', (e) => { res.writeHead(502); res.end('Proxy error: ' + e.message); });
+      proxyReq.setTimeout(20000, () => { proxyReq.destroy(); res.writeHead(504); res.end('Image fetch timeout'); });
+    } catch(e) { res.writeHead(500); res.end('Error: ' + e.message); }
     return;
   }
   
